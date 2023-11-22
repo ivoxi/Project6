@@ -19,7 +19,7 @@ struct Settings {
     COLORREF currentBgColor;
 };
 
-Settings appConfig = { defaultCellsCount, defaultWindowWidth, defaultWindowHeight, RGB(255, 255, 255), RGB(255, 0, 0), RGB(0, 0, 255) };
+Settings appConfig = { defaultCellsCount, defaultWindowWidth, defaultWindowHeight, RGB(0, 0, 255), RGB(255, 0, 0), RGB(0, 0, 255) };
 
 int grid[maxCellsCount][maxCellsCount] = { 0 };
 int cellWidth, cellHeight;
@@ -45,19 +45,27 @@ void LoadSettings() {
 
         int red, green, blue;
 
-        if (fscanf_s(configFile, "WindowBgColor=%d %d %d\n", &red, &green, &blue) != 3) {
+        if (fscanf_s(configFile, "WindowBgColor=%d %d %d\n", &red, &green, &blue) == 3) {
+            appConfig.windowBgColor = RGB(red, green, blue);
+            appConfig.currentBgColor = RGB(red, green, blue);
+        }
+        else {
             red = 255;
             green = 255;
             blue = 255;
+            appConfig.windowBgColor = RGB(red, green, blue);
+            appConfig.currentBgColor = RGB(red, green, blue);
         }
-        appConfig.windowBgColor = RGB(red, green, blue);
 
-        if (fscanf_s(configFile, "GridLineColor=%d %d %d\n", &red, &green, &blue) != 3) {
+        if (fscanf_s(configFile, "GridLineColor=%d %d %d\n", &red, &green, &blue) == 3) {
+            appConfig.gridLineColor = RGB(red, green, blue);
+        }
+        else {
             red = 255;
             green = 0;
             blue = 0;
+            appConfig.gridLineColor = RGB(red, green, blue);
         }
-        appConfig.gridLineColor = RGB(red, green, blue);
 
         fclose(configFile);
     }
