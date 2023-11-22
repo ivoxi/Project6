@@ -119,15 +119,14 @@ void ModifyGridColor(HDC hdc) {
     }
 }
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
-    int cellsCount = defaultCellsCount;
-    if (lpCmdLine && lpCmdLine[0] != '\0') {
-        cellsCount = atoi(lpCmdLine);
-        cellsCount = min(maxCellsCount, max(cellsCount, 1));
-    }
 
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
     LoadSettings();
-    appConfig.cellsCount = cellsCount;
+    if (lpCmdLine && lpCmdLine[0] != '\0') {
+        int cellsCount = atoi(lpCmdLine);
+        cellsCount = min(maxCellsCount, max(cellsCount, 1));
+        appConfig.cellsCount = cellsCount;
+    }
 
     WNDCLASSEX windowClass = { 0 };
     windowClass.cbSize = sizeof(WNDCLASSEX);
@@ -165,8 +164,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     }
 
     SaveSettings(appConfig);
-
-    // Free resources
     DeleteObject(bgBrush);
 
     return msg.wParam;
@@ -298,20 +295,20 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
     break;
     case WM_SIZE:
     {
-        appConfig.windowWidth = LOWORD(lParam);
-        appConfig.windowHeight = HIWORD(lParam);
+        RECT rect;
+        GetWindowRect(hwnd, &rect);
+
+        appConfig.windowWidth = rect.right - rect.left;
+        appConfig.windowHeight = rect.bottom - rect.top;
 
         cellWidth = appConfig.cellsCount == 0 ? 0 : appConfig.windowWidth / appConfig.cellsCount;
         cellHeight = appConfig.cellsCount == 0 ? 0 : appConfig.windowHeight / appConfig.cellsCount;
-
-        // Update grid parameters on window size change
         InvalidateRect(hwnd, nullptr, TRUE);
     }
     break;
 
     case WM_SIZING:
     {
-        // Handle resizing window while maintaining minimum size
         RECT* rect = (RECT*)lParam;
         int newWidth = rect->right - rect->left;
         int newHeight = rect->bottom - rect->top;
@@ -328,7 +325,6 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
     case WM_NCHITTEST:
     {
-        // Allow resizing from the bottom
         LRESULT hitTest = DefWindowProc(hwnd, message, wParam, lParam);
 
         if (hitTest == HTBOTTOM || hitTest == HTBOTTOMLEFT || hitTest == HTBOTTOMRIGHT) {
