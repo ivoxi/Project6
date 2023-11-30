@@ -4,6 +4,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
+#include <string>
+#include <sstream>
+#include <Windows.h>
 
 const int maxCellsCount = 200;
 const int defaultCellsCount = 4;
@@ -104,39 +107,32 @@ void LoadSettingsFromFileStream() {
     std::ifstream configFile("config.txt");
 
     if (configFile.is_open()) {
-        if (!(configFile >> appConfig.cellsCount)) {
-            appConfig.cellsCount = defaultCellsCount;
+        std::string line;
+        while (std::getline(configFile, line)) {
+            std::istringstream iss(line);
+            std::string key;
+            if (std::getline(iss, key, '=')) {
+                if (key == "CellsCount") {
+                    iss >> appConfig.cellsCount;
+                }
+                else if (key == "WindowSize") {
+                    iss >> appConfig.windowWidth >> appConfig.windowHeight;
+                }
+                else if (key == "WindowBgColor") {
+                    int red, green, blue;
+                    if (iss >> red >> green >> blue) {
+                        appConfig.windowBgColor = RGB(red, green, blue);
+                        appConfig.currentBgColor = RGB(red, green, blue);
+                    }
+                }
+                else if (key == "GridLineColor") {
+                    int red, green, blue;
+                    if (iss >> red >> green >> blue) {
+                        appConfig.gridLineColor = RGB(red, green, blue);
+                    }
+                }
+            }
         }
-
-        if (!(configFile >> appConfig.windowWidth >> appConfig.windowHeight)) {
-            appConfig.windowWidth = defaultWindowWidth;
-            appConfig.windowHeight = defaultWindowHeight;
-        }
-
-        int red, green, blue;
-
-        if (configFile >> red >> green >> blue) {
-            appConfig.windowBgColor = RGB(red, green, blue);
-            appConfig.currentBgColor = RGB(red, green, blue);
-        }
-        else {
-            red = 255;
-            green = 255;
-            blue = 255;
-            appConfig.windowBgColor = RGB(red, green, blue);
-            appConfig.currentBgColor = RGB(red, green, blue);
-        }
-
-        if (configFile >> red >> green >> blue) {
-            appConfig.gridLineColor = RGB(red, green, blue);
-        }
-        else {
-            red = 255;
-            green = 0;
-            blue = 0;
-            appConfig.gridLineColor = RGB(red, green, blue);
-        }
-
         configFile.close();
     }
     else {
@@ -150,10 +146,10 @@ void SaveSettingsToFileStream(const Settings& settings) {
     if (configFile.is_open()) {
         configFile << "CellsCount=" << settings.cellsCount << "\n";
         configFile << "WindowSize=" << settings.windowWidth << " " << settings.windowHeight << "\n";
-        configFile << "WindowBgColor=" << GetRValue(settings.currentBgColor) << " "
-            << GetGValue(settings.currentBgColor) << " " << GetBValue(settings.currentBgColor) << "\n";
-        configFile << "GridLineColor=" << GetRValue(settings.gridLineColor) << " "
-            << GetGValue(settings.gridLineColor) << " " << GetBValue(settings.gridLineColor) << "\n";
+        configFile << "WindowBgColor=" << static_cast<int>(GetRValue(settings.currentBgColor)) << " "
+            << static_cast<int>(GetGValue(settings.currentBgColor)) << " " << static_cast<int>(GetBValue(settings.currentBgColor)) << "\n";
+        configFile << "GridLineColor=" << static_cast<int>(GetRValue(settings.gridLineColor)) << " "
+            << static_cast<int>(GetGValue(settings.gridLineColor)) << " " << static_cast<int>(GetBValue(settings.gridLineColor)) << "\n";
 
         configFile.close();
     }
@@ -228,7 +224,7 @@ void LoadSettingsMapping() {
 void SaveSettingsMapping(const Settings& settings) {
     HANDLE hFile = CreateFile(
         L"config.txt",
-        GENERIC_WRITE,
+        GENERIC_WRITE | GENERIC_READ,
         0,
         NULL,
         CREATE_ALWAYS,
@@ -237,40 +233,22 @@ void SaveSettingsMapping(const Settings& settings) {
     );
 
     if (hFile != INVALID_HANDLE_VALUE) {
-        HANDLE hMapFile = CreateFileMapping(
-            hFile,
-            NULL,
-            PAGE_READWRITE,
-            0,
-            0,
-            NULL
-        );
+        char buffer[256];
+        DWORD dwBytesWritten;
 
-        if (hMapFile != NULL) {
-            char* fileContent = static_cast<char*>(MapViewOfFile(
-                hMapFile,
-                FILE_MAP_WRITE,
-                0,
-                0,
-                0
-            ));
+        sprintf_s(buffer, sizeof(buffer), "CellsCount=%d\n", settings.cellsCount);
+        WriteFile(hFile, buffer, strlen(buffer), &dwBytesWritten, NULL);
 
-            if (fileContent != NULL) {
-                sprintf_s(fileContent, MAX_PATH, "CellsCount=%d\n", settings.cellsCount);
-                fileContent += strlen(fileContent);
-                sprintf_s(fileContent, MAX_PATH, "WindowSize=%d %d\n", settings.windowWidth, settings.windowHeight);
-                fileContent += strlen(fileContent);
-                sprintf_s(fileContent, MAX_PATH, "WindowBgColor=%d %d %d\n",
-                    GetRValue(settings.currentBgColor), GetGValue(settings.currentBgColor), GetBValue(settings.currentBgColor));
-                fileContent += strlen(fileContent);
-                sprintf_s(fileContent, MAX_PATH, "GridLineColor=%d %d %d\n",
-                    GetRValue(settings.gridLineColor), GetGValue(settings.gridLineColor), GetBValue(settings.gridLineColor));
+        sprintf_s(buffer, sizeof(buffer), "WindowSize=%d %d\n", settings.windowWidth, settings.windowHeight);
+        WriteFile(hFile, buffer, strlen(buffer), &dwBytesWritten, NULL);
 
-                UnmapViewOfFile(fileContent);
-            }
+        sprintf_s(buffer, sizeof(buffer), "WindowBgColor=%d %d %d\n",
+            GetRValue(settings.windowBgColor), GetGValue(settings.windowBgColor), GetBValue(settings.windowBgColor));
+        WriteFile(hFile, buffer, strlen(buffer), &dwBytesWritten, NULL);
 
-            CloseHandle(hMapFile);
-        }
+        sprintf_s(buffer, sizeof(buffer), "GridLineColor=%d %d %d\n",
+            GetRValue(settings.gridLineColor), GetGValue(settings.gridLineColor), GetBValue(settings.gridLineColor));
+        WriteFile(hFile, buffer, strlen(buffer), &dwBytesWritten, NULL);
 
         CloseHandle(hFile);
     }
@@ -279,14 +257,12 @@ void SaveSettingsMapping(const Settings& settings) {
     }
 }
 
-#include <Windows.h>
-#include <iostream>
 
 void LoadSettingsWinApi() {
     HANDLE hFile = CreateFile(
         L"config.txt",
         GENERIC_READ,
-        FILE_SHARE_READ,
+        0,
         NULL,
         OPEN_EXISTING,
         FILE_ATTRIBUTE_NORMAL,
@@ -302,30 +278,41 @@ void LoadSettingsWinApi() {
             if (ReadFile(hFile, fileContent, fileSize, &bytesRead, NULL)) {
                 fileContent[bytesRead] = '\0';
 
-                sscanf_s(fileContent, "CellsCount=%d\n", &appConfig.cellsCount);
-                sscanf_s(fileContent, "WindowSize=%d %d\n", &appConfig.windowWidth, &appConfig.windowHeight);
+                char* currentPos = fileContent;
+                int charsRead;
+
+                if (sscanf_s(currentPos, "CellsCount=%d%n", &appConfig.cellsCount, &charsRead) == 1) {
+                    currentPos += charsRead;
+                }
+                else {
+                    appConfig.cellsCount = defaultCellsCount;
+                }
+
+                if (sscanf_s(currentPos, "WindowSize=%d %d%n", &appConfig.windowWidth, &appConfig.windowHeight, &charsRead) == 2) {
+                    currentPos += charsRead;
+                }
+                else {
+                    appConfig.windowWidth = defaultWindowWidth;
+                    appConfig.windowHeight = defaultWindowHeight;
+                }
 
                 int red, green, blue;
-                if (sscanf_s(fileContent, "WindowBgColor=%d %d %d\n", &red, &green, &blue) == 3) {
+                if (sscanf_s(currentPos, "WindowBgColor=%d %d %d%n", &red, &green, &blue, &charsRead) == 3) {
                     appConfig.windowBgColor = RGB(red, green, blue);
                     appConfig.currentBgColor = RGB(red, green, blue);
+                    currentPos += charsRead;
                 }
                 else {
-                    red = 255;
-                    green = 255;
-                    blue = 255;
-                    appConfig.windowBgColor = RGB(red, green, blue);
-                    appConfig.currentBgColor = RGB(red, green, blue);
+                    appConfig.windowBgColor = RGB(255, 255, 255);
+                    appConfig.currentBgColor = RGB(255, 255, 255);
                 }
 
-                if (sscanf_s(fileContent, "GridLineColor=%d %d %d\n", &red, &green, &blue) == 3) {
+                if (sscanf_s(currentPos, "GridLineColor=%d %d %d%n", &red, &green, &blue, &charsRead) == 3) {
                     appConfig.gridLineColor = RGB(red, green, blue);
+                    currentPos += charsRead;
                 }
                 else {
-                    red = 255;
-                    green = 0;
-                    blue = 0;
-                    appConfig.gridLineColor = RGB(red, green, blue);
+                    appConfig.gridLineColor = RGB(255, 0, 0);
                 }
             }
 
