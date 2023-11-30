@@ -197,28 +197,18 @@ void LoadSettingsMapping() {
 
             if (fileContent != NULL) {
                 sscanf_s(fileContent, "CellsCount=%d\n", &appConfig.cellsCount);
+                fileContent = strchr(fileContent, '\n') + 1;
                 sscanf_s(fileContent, "WindowSize=%d %d\n", &appConfig.windowWidth, &appConfig.windowHeight);
+                fileContent = strchr(fileContent, '\n') + 1;
 
                 int red, green, blue;
                 if (sscanf_s(fileContent, "WindowBgColor=%d %d %d\n", &red, &green, &blue) == 3) {
                     appConfig.windowBgColor = RGB(red, green, blue);
                     appConfig.currentBgColor = RGB(red, green, blue);
                 }
-                else {
-                    red = 255;
-                    green = 255;
-                    blue = 255;
-                    appConfig.windowBgColor = RGB(red, green, blue);
-                    appConfig.currentBgColor = RGB(red, green, blue);
-                }
+                fileContent = strchr(fileContent, '\n') + 1;
 
                 if (sscanf_s(fileContent, "GridLineColor=%d %d %d\n", &red, &green, &blue) == 3) {
-                    appConfig.gridLineColor = RGB(red, green, blue);
-                }
-                else {
-                    red = 255;
-                    green = 0;
-                    blue = 0;
                     appConfig.gridLineColor = RGB(red, green, blue);
                 }
 
@@ -267,9 +257,12 @@ void SaveSettingsMapping(const Settings& settings) {
 
             if (fileContent != NULL) {
                 sprintf_s(fileContent, MAX_PATH, "CellsCount=%d\n", settings.cellsCount);
+                fileContent += strlen(fileContent);
                 sprintf_s(fileContent, MAX_PATH, "WindowSize=%d %d\n", settings.windowWidth, settings.windowHeight);
+                fileContent += strlen(fileContent);
                 sprintf_s(fileContent, MAX_PATH, "WindowBgColor=%d %d %d\n",
                     GetRValue(settings.currentBgColor), GetGValue(settings.currentBgColor), GetBValue(settings.currentBgColor));
+                fileContent += strlen(fileContent);
                 sprintf_s(fileContent, MAX_PATH, "GridLineColor=%d %d %d\n",
                     GetRValue(settings.gridLineColor), GetGValue(settings.gridLineColor), GetBValue(settings.gridLineColor));
 
@@ -457,6 +450,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     }
 
     loadSettingsFunction();
+
+    if (lpCmdLine && lpCmdLine[0] != '\0') {
+        int cellsCount = atoi(lpCmdLine);
+        cellsCount = min(maxCellsCount, max(cellsCount, 1));
+        appConfig.cellsCount = cellsCount;
+    }
 
     WNDCLASSEX windowClass = { 0 };
     windowClass.cbSize = sizeof(WNDCLASSEX);
