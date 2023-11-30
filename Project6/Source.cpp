@@ -25,12 +25,18 @@ int grid[maxCellsCount][maxCellsCount] = { 0 };
 int cellWidth, cellHeight;
 HBRUSH bgBrush;
 
-void LoadSettings();
-void SaveSettings(const Settings& settings);
+void LoadSettingsFileVars();
+void SaveSettingsFileVars(const Settings& settings);
+void LoadSettingsFromFileStream();
+void SaveSettingsToFileStream(const Settings& settings);
+void LoadSettingsMapping();
+void SaveSettingsMapping(const Settings& settings);
+void LoadSettingsWinApi();
+void SaveSettingsWinApi(const Settings& settings);
 void ModifyGridColor(HDC hdc);
 LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 
-void LoadSettings() {
+void LoadSettingsFileVars() {
     FILE* configFile;
 
     if (fopen_s(&configFile, "config.txt", "r") == 0) {
@@ -74,7 +80,7 @@ void LoadSettings() {
     }
 }
 
-void SaveSettings(const Settings& settings) {
+void SaveSettingsFileVars(const Settings& settings) {
     FILE* configFile;
 
     if (fopen_s(&configFile, "config.txt", "w") == 0) {
@@ -91,6 +97,295 @@ void SaveSettings(const Settings& settings) {
         std::cerr << "Failed to create or open config file for writing." << std::endl;
     }
 }
+#include <fstream>
+#include <iostream>
+
+void LoadSettingsFromFileStream() {
+    std::ifstream configFile("config.txt");
+
+    if (configFile.is_open()) {
+        if (!(configFile >> appConfig.cellsCount)) {
+            appConfig.cellsCount = defaultCellsCount;
+        }
+
+        if (!(configFile >> appConfig.windowWidth >> appConfig.windowHeight)) {
+            appConfig.windowWidth = defaultWindowWidth;
+            appConfig.windowHeight = defaultWindowHeight;
+        }
+
+        int red, green, blue;
+
+        if (configFile >> red >> green >> blue) {
+            appConfig.windowBgColor = RGB(red, green, blue);
+            appConfig.currentBgColor = RGB(red, green, blue);
+        }
+        else {
+            red = 255;
+            green = 255;
+            blue = 255;
+            appConfig.windowBgColor = RGB(red, green, blue);
+            appConfig.currentBgColor = RGB(red, green, blue);
+        }
+
+        if (configFile >> red >> green >> blue) {
+            appConfig.gridLineColor = RGB(red, green, blue);
+        }
+        else {
+            red = 255;
+            green = 0;
+            blue = 0;
+            appConfig.gridLineColor = RGB(red, green, blue);
+        }
+
+        configFile.close();
+    }
+    else {
+        std::cerr << "Failed to open config file. Using default settings." << std::endl;
+    }
+}
+
+void SaveSettingsToFileStream(const Settings& settings) {
+    std::ofstream configFile("config.txt");
+
+    if (configFile.is_open()) {
+        configFile << "CellsCount=" << settings.cellsCount << "\n";
+        configFile << "WindowSize=" << settings.windowWidth << " " << settings.windowHeight << "\n";
+        configFile << "WindowBgColor=" << GetRValue(settings.currentBgColor) << " "
+            << GetGValue(settings.currentBgColor) << " " << GetBValue(settings.currentBgColor) << "\n";
+        configFile << "GridLineColor=" << GetRValue(settings.gridLineColor) << " "
+            << GetGValue(settings.gridLineColor) << " " << GetBValue(settings.gridLineColor) << "\n";
+
+        configFile.close();
+    }
+    else {
+        std::cerr << "Failed to create or open config file for writing." << std::endl;
+    }
+}
+
+#include <Windows.h>
+#include <iostream>
+
+void LoadSettingsMapping() {
+    HANDLE hFile = CreateFile(
+        L"config.txt",
+        GENERIC_READ,
+        0,
+        NULL,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL
+    );
+
+    if (hFile != INVALID_HANDLE_VALUE) {
+        HANDLE hMapFile = CreateFileMapping(
+            hFile,
+            NULL,
+            PAGE_READONLY,
+            0,
+            0,
+            NULL
+        );
+
+        if (hMapFile != NULL) {
+            char* fileContent = static_cast<char*>(MapViewOfFile(
+                hMapFile,
+                FILE_MAP_READ,
+                0,
+                0,
+                0
+            ));
+
+            if (fileContent != NULL) {
+                sscanf_s(fileContent, "CellsCount=%d\n", &appConfig.cellsCount);
+                sscanf_s(fileContent, "WindowSize=%d %d\n", &appConfig.windowWidth, &appConfig.windowHeight);
+
+                int red, green, blue;
+                if (sscanf_s(fileContent, "WindowBgColor=%d %d %d\n", &red, &green, &blue) == 3) {
+                    appConfig.windowBgColor = RGB(red, green, blue);
+                    appConfig.currentBgColor = RGB(red, green, blue);
+                }
+                else {
+                    red = 255;
+                    green = 255;
+                    blue = 255;
+                    appConfig.windowBgColor = RGB(red, green, blue);
+                    appConfig.currentBgColor = RGB(red, green, blue);
+                }
+
+                if (sscanf_s(fileContent, "GridLineColor=%d %d %d\n", &red, &green, &blue) == 3) {
+                    appConfig.gridLineColor = RGB(red, green, blue);
+                }
+                else {
+                    red = 255;
+                    green = 0;
+                    blue = 0;
+                    appConfig.gridLineColor = RGB(red, green, blue);
+                }
+
+                UnmapViewOfFile(fileContent);
+            }
+
+            CloseHandle(hMapFile);
+        }
+
+        CloseHandle(hFile);
+    }
+    else {
+        std::cerr << "Failed to open config file. Using default settings." << std::endl;
+    }
+}
+
+void SaveSettingsMapping(const Settings& settings) {
+    HANDLE hFile = CreateFile(
+        L"config.txt",
+        GENERIC_WRITE,
+        0,
+        NULL,
+        CREATE_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL
+    );
+
+    if (hFile != INVALID_HANDLE_VALUE) {
+        HANDLE hMapFile = CreateFileMapping(
+            hFile,
+            NULL,
+            PAGE_READWRITE,
+            0,
+            0,
+            NULL
+        );
+
+        if (hMapFile != NULL) {
+            char* fileContent = static_cast<char*>(MapViewOfFile(
+                hMapFile,
+                FILE_MAP_WRITE,
+                0,
+                0,
+                0
+            ));
+
+            if (fileContent != NULL) {
+                sprintf_s(fileContent, MAX_PATH, "CellsCount=%d\n", settings.cellsCount);
+                sprintf_s(fileContent, MAX_PATH, "WindowSize=%d %d\n", settings.windowWidth, settings.windowHeight);
+                sprintf_s(fileContent, MAX_PATH, "WindowBgColor=%d %d %d\n",
+                    GetRValue(settings.currentBgColor), GetGValue(settings.currentBgColor), GetBValue(settings.currentBgColor));
+                sprintf_s(fileContent, MAX_PATH, "GridLineColor=%d %d %d\n",
+                    GetRValue(settings.gridLineColor), GetGValue(settings.gridLineColor), GetBValue(settings.gridLineColor));
+
+                UnmapViewOfFile(fileContent);
+            }
+
+            CloseHandle(hMapFile);
+        }
+
+        CloseHandle(hFile);
+    }
+    else {
+        std::cerr << "Failed to create or open config file for writing." << std::endl;
+    }
+}
+
+#include <Windows.h>
+#include <iostream>
+
+void LoadSettingsWinApi() {
+    HANDLE hFile = CreateFile(
+        L"config.txt",
+        GENERIC_READ,
+        FILE_SHARE_READ,
+        NULL,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL
+    );
+
+    if (hFile != INVALID_HANDLE_VALUE) {
+        DWORD fileSize = GetFileSize(hFile, NULL);
+        if (fileSize != INVALID_FILE_SIZE) {
+            char* fileContent = new char[fileSize + 1];
+
+            DWORD bytesRead;
+            if (ReadFile(hFile, fileContent, fileSize, &bytesRead, NULL)) {
+                fileContent[bytesRead] = '\0';
+
+                sscanf_s(fileContent, "CellsCount=%d\n", &appConfig.cellsCount);
+                sscanf_s(fileContent, "WindowSize=%d %d\n", &appConfig.windowWidth, &appConfig.windowHeight);
+
+                int red, green, blue;
+                if (sscanf_s(fileContent, "WindowBgColor=%d %d %d\n", &red, &green, &blue) == 3) {
+                    appConfig.windowBgColor = RGB(red, green, blue);
+                    appConfig.currentBgColor = RGB(red, green, blue);
+                }
+                else {
+                    red = 255;
+                    green = 255;
+                    blue = 255;
+                    appConfig.windowBgColor = RGB(red, green, blue);
+                    appConfig.currentBgColor = RGB(red, green, blue);
+                }
+
+                if (sscanf_s(fileContent, "GridLineColor=%d %d %d\n", &red, &green, &blue) == 3) {
+                    appConfig.gridLineColor = RGB(red, green, blue);
+                }
+                else {
+                    red = 255;
+                    green = 0;
+                    blue = 0;
+                    appConfig.gridLineColor = RGB(red, green, blue);
+                }
+            }
+
+            delete[] fileContent;
+        }
+
+        CloseHandle(hFile);
+    }
+    else {
+        std::cerr << "Failed to open config file. Using default settings." << std::endl;
+    }
+}
+
+void SaveSettingsWinApi(const Settings& settings) {
+    HANDLE hFile = CreateFile(
+        L"config.txt",
+        GENERIC_WRITE,
+        0,
+        NULL,
+        CREATE_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL
+    );
+
+    if (hFile != INVALID_HANDLE_VALUE) {
+        char buffer[MAX_PATH];
+        DWORD bytesWritten;
+
+        sprintf_s(buffer, MAX_PATH, "CellsCount=%d\n", settings.cellsCount);
+        WriteFile(hFile, buffer, static_cast<DWORD>(strlen(buffer)), &bytesWritten, NULL);
+
+        sprintf_s(buffer, MAX_PATH, "WindowSize=%d %d\n", settings.windowWidth, settings.windowHeight);
+        WriteFile(hFile, buffer, static_cast<DWORD>(strlen(buffer)), &bytesWritten, NULL);
+
+        sprintf_s(buffer, MAX_PATH, "WindowBgColor=%d %d %d\n",
+            GetRValue(settings.currentBgColor), GetGValue(settings.currentBgColor), GetBValue(settings.currentBgColor));
+        WriteFile(hFile, buffer, static_cast<DWORD>(strlen(buffer)), &bytesWritten, NULL);
+
+        sprintf_s(buffer, MAX_PATH, "GridLineColor=%d %d %d\n",
+            GetRValue(settings.gridLineColor), GetGValue(settings.gridLineColor), GetBValue(settings.gridLineColor));
+        WriteFile(hFile, buffer, static_cast<DWORD>(strlen(buffer)), &bytesWritten, NULL);
+
+        CloseHandle(hFile);
+    }
+    else {
+        std::cerr << "Failed to create or open config file for writing." << std::endl;
+    }
+}
+
+
+
+
+
 
 void ModifyGridColor(HDC hdc) {
     HPEN newPen = CreatePen(PS_SOLID, 1, appConfig.gridLineColor);
@@ -121,12 +416,47 @@ void ModifyGridColor(HDC hdc) {
 
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
-    LoadSettings();
+    int configMode = 1; // По умолчанию используем файлы
+
     if (lpCmdLine && lpCmdLine[0] != '\0') {
         int cellsCount = atoi(lpCmdLine);
         cellsCount = min(maxCellsCount, max(cellsCount, 1));
         appConfig.cellsCount = cellsCount;
+
+        if (lpCmdLine[2] != '\0') {
+            configMode = atoi(lpCmdLine + 2);
+        }
     }
+
+    // Выбор функций в зависимости от configMode
+    void (*loadSettingsFunction)() = nullptr;
+    void (*saveSettingsFunction)(const Settings&) = nullptr;
+
+    switch (configMode) {
+    case 1:
+        loadSettingsFunction = LoadSettingsFileVars;
+        saveSettingsFunction = SaveSettingsFileVars;
+        break;
+    case 2:
+        loadSettingsFunction = LoadSettingsFromFileStream;
+        saveSettingsFunction = SaveSettingsToFileStream;
+        break;
+    case 3:
+        loadSettingsFunction = LoadSettingsMapping;
+        saveSettingsFunction = SaveSettingsMapping;
+        break;
+    case 4:
+        loadSettingsFunction = LoadSettingsWinApi;
+        saveSettingsFunction = SaveSettingsWinApi;
+        break;
+    default:
+        std::cerr << "Invalid configMode. Using default file functions." << std::endl;
+        loadSettingsFunction = LoadSettingsFileVars;
+        saveSettingsFunction = SaveSettingsFileVars;
+        break;
+    }
+
+    loadSettingsFunction();
 
     WNDCLASSEX windowClass = { 0 };
     windowClass.cbSize = sizeof(WNDCLASSEX);
@@ -163,7 +493,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         DispatchMessage(&msg);
     }
 
-    SaveSettings(appConfig);
+    saveSettingsFunction(appConfig);
     DeleteObject(bgBrush);
 
     return msg.wParam;
