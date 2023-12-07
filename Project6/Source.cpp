@@ -508,9 +508,31 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
+    case WM_CREATE:
+        SetTimer(hwnd, 1, 100, nullptr); // 100 ms timer
+        break;
+    case WM_TIMER:
+        WaitForSingleObject(hMutex, INFINITE);  // lock mutex
+
+        int* sharedMemory = static_cast<int*>(MapViewOfFile(hSharedMemory, FILE_MAP_ALL_ACCESS, 0, 0, 0));
+
+        for (int i = 0; i < appConfig.cellsCount; i++) {
+            for (int j = 0; j < appConfig.cellsCount; j++) {
+                int value = sharedMemory[i * maxCellsCount + j];
+                if (grid[i][j] != value) {
+                    grid[i][j] = value;
+                    InvalidateRect(hwnd, nullptr, TRUE);
+                }
+            }
+        }
+
+        UnmapViewOfFile(sharedMemory);
+
+        ReleaseMutex(hMutex);  // unlock mutex
+    break;
     case WM_CLOSE:
         PostQuitMessage(0);
-        break;
+    break;
     case WM_PAINT:
     {
         PAINTSTRUCT ps;
