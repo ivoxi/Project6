@@ -508,10 +508,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
-    case WM_CREATE:
+    case WM_CREATE:{
         SetTimer(hwnd, 1, 100, nullptr); // 100 ms timer
+    }
         break;
+    
     case WM_TIMER:
+    {
         WaitForSingleObject(hMutex, INFINITE);  // lock mutex
 
         int* sharedMemory = static_cast<int*>(MapViewOfFile(hSharedMemory, FILE_MAP_ALL_ACCESS, 0, 0, 0));
@@ -529,10 +532,12 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         UnmapViewOfFile(sharedMemory);
 
         ReleaseMutex(hMutex);  // unlock mutex
+    }
     break;
     case WM_CLOSE:
         PostQuitMessage(0);
-    break;
+        break;
+    
     case WM_PAINT:
     {
         PAINTSTRUCT ps;
