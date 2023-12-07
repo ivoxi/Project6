@@ -1,4 +1,4 @@
 CellsCount=4
 WindowSize=1071 504
-WindowBgColor=214 174 82
-GridLineColor=255 0 0
+WindowBgColor=41 35 190
+GridLineColor=251 0 0

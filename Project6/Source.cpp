@@ -7,7 +7,11 @@
 #include <string>
 #include <sstream>
 #include <Windows.h>
+const wchar_t* SharedMemoryName = L"GameSharedMemory";
+const wchar_t* MutexName = L"GameMutex";
 
+HANDLE hSharedMemory;
+HANDLE hMutex;
 const int maxCellsCount = 200;
 const int defaultCellsCount = 4;
 const int defaultWindowWidth = 320;
@@ -473,11 +477,28 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     ShowWindow(hwnd, nCmdShow);
     UpdateWindow(hwnd);
 
+    hMutex = CreateMutex(NULL, FALSE, MutexName);
+    if (hMutex == NULL) {
+        MessageBox(nullptr, L"Failed to create mutex!", L"Error", MB_ICONERROR);
+        return 0;
+    }
+
+    hSharedMemory = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(int) * maxCellsCount * maxCellsCount, SharedMemoryName);
+    if (hSharedMemory == NULL) {
+        MessageBox(nullptr, L"Failed to create shared memory!", L"Error", MB_ICONERROR);
+        CloseHandle(hMutex);
+        return 0;
+    }
+
     MSG msg = { nullptr };
     while (GetMessage(&msg, nullptr, 0, 0)) {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
+
+    UnmapViewOfFile(hSharedMemory);
+    CloseHandle(hSharedMemory);
+    CloseHandle(hMutex);
 
     saveSettingsFunction(appConfig);
     DeleteObject(bgBrush);
@@ -523,24 +544,36 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
             std::cerr << "Failed to delete grid color pen after painting." << std::endl;
         }
 
-        for (int row = 0; row < appConfig.cellsCount; row++) {
-            for (int col = 0; col < appConfig.cellsCount; col++) {
-                int cellValue = grid[row][col];
-                if (cellValue == 1) {
-                    Ellipse(hdc, col * cellWidth, row * cellHeight, (col + 1) * cellWidth, (row + 1) * cellHeight);
-                }
-                else if (cellValue == 2) {
-                    MoveToEx(hdc, col * cellWidth, row * cellHeight, nullptr);
-                    LineTo(hdc, (col + 1) * cellWidth, (row + 1) * cellHeight);
-                    MoveToEx(hdc, (col + 1) * cellWidth, row * cellHeight, nullptr);
-                    LineTo(hdc, col * cellWidth, (row + 1) * cellHeight);
+        // Определение размера разделяемой памяти
+        int sharedMemorySize = sizeof(int) * maxCellsCount * maxCellsCount;
+
+        // Попытка прочитать разделяемую память
+        int* sharedMemoryGrid = static_cast<int*>(MapViewOfFile(hSharedMemory, FILE_MAP_ALL_ACCESS, 0, 0, sharedMemorySize));
+
+        if (sharedMemoryGrid != nullptr) {
+            for (int row = 0; row < appConfig.cellsCount; row++) {
+                for (int col = 0; col < appConfig.cellsCount; col++) {
+                    int cellValue = sharedMemoryGrid[row * maxCellsCount + col];
+                    if (cellValue == 1) {
+                        Ellipse(hdc, col * cellWidth, row * cellHeight, (col + 1) * cellWidth, (row + 1) * cellHeight);
+                    }
+                    else if (cellValue == 2) {
+                        MoveToEx(hdc, col * cellWidth, row * cellHeight, nullptr);
+                        LineTo(hdc, (col + 1) * cellWidth, (row + 1) * cellHeight);
+                        MoveToEx(hdc, (col + 1) * cellWidth, row * cellHeight, nullptr);
+                        LineTo(hdc, col * cellWidth, (row + 1) * cellHeight);
+                    }
                 }
             }
+
+            // Освобождение разделяемой памяти
+            UnmapViewOfFile(sharedMemoryGrid);
         }
 
         EndPaint(hwnd, &ps);
     }
     break;
+
 
     case WM_KEYDOWN:
         if (wParam == VK_ESCAPE || (GetKeyState(VK_LCONTROL) & 0x8000 && wParam == 'Q')) {
@@ -590,7 +623,16 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         int row = cellHeight == 0 ? 0 : y / cellHeight;
 
         if (col < appConfig.cellsCount && row < appConfig.cellsCount && grid[row][col] == 0) {
+            WaitForSingleObject(hMutex, INFINITE);  // Захватываем мьютекс
+
             grid[row][col] = 1;
+
+            // Обновляем разделяемую память
+            int* sharedMemory = static_cast<int*>(MapViewOfFile(hSharedMemory, FILE_MAP_ALL_ACCESS, 0, 0, 0));
+            sharedMemory[row * maxCellsCount + col] = 1;
+            UnmapViewOfFile(sharedMemory);
+
+            ReleaseMutex(hMutex);  // Освобождаем мьютекс
             InvalidateRect(hwnd, nullptr, TRUE);
         }
     }
@@ -599,16 +641,26 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
     {
         int x = LOWORD(lParam);
         int y = HIWORD(lParam);
-
         int col = cellWidth == 0 ? 0 : x / cellWidth;
         int row = cellHeight == 0 ? 0 : y / cellHeight;
 
         if (col < appConfig.cellsCount && row < appConfig.cellsCount && grid[row][col] == 0) {
+            WaitForSingleObject(hMutex, INFINITE);  // Захватываем мьютекс
+
             grid[row][col] = 2;
+
+            // Обновляем разделяемую память
+            int* sharedMemory = static_cast<int*>(MapViewOfFile(hSharedMemory, FILE_MAP_ALL_ACCESS, 0, 0, 0));
+            sharedMemory[row * maxCellsCount + col] = 2;
+            UnmapViewOfFile(sharedMemory);
+
+            ReleaseMutex(hMutex);  // Освобождаем мьютекс
             InvalidateRect(hwnd, nullptr, TRUE);
         }
     }
     break;
+
+
     case WM_SIZE:
     {
         RECT rect;
