@@ -622,19 +622,20 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         int col = cellWidth == 0 ? 0 : x / cellWidth;
         int row = cellHeight == 0 ? 0 : y / cellHeight;
 
-        if (col < appConfig.cellsCount && row < appConfig.cellsCount && grid[row][col] == 0) {
-            WaitForSingleObject(hMutex, INFINITE);  // Захватываем мьютекс
+        WaitForSingleObject(hMutex, INFINITE);  //  
 
+        if (col < appConfig.cellsCount && row < appConfig.cellsCount && grid[row][col] == 0) {
             grid[row][col] = 1;
 
-            // Обновляем разделяемую память
+            //   
             int* sharedMemory = static_cast<int*>(MapViewOfFile(hSharedMemory, FILE_MAP_ALL_ACCESS, 0, 0, 0));
             sharedMemory[row * maxCellsCount + col] = 1;
             UnmapViewOfFile(sharedMemory);
 
-            ReleaseMutex(hMutex);  // Освобождаем мьютекс
             InvalidateRect(hwnd, nullptr, TRUE);
         }
+
+        ReleaseMutex(hMutex);  //  
     }
     break;
     case WM_RBUTTONDOWN:
@@ -644,19 +645,20 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         int col = cellWidth == 0 ? 0 : x / cellWidth;
         int row = cellHeight == 0 ? 0 : y / cellHeight;
 
-        if (col < appConfig.cellsCount && row < appConfig.cellsCount && grid[row][col] == 0) {
-            WaitForSingleObject(hMutex, INFINITE);  // Захватываем мьютекс
+        WaitForSingleObject(hMutex, INFINITE);  //  
 
+        if (col < appConfig.cellsCount && row < appConfig.cellsCount && grid[row][col] == 0) {
             grid[row][col] = 2;
 
-            // Обновляем разделяемую память
+            //   
             int* sharedMemory = static_cast<int*>(MapViewOfFile(hSharedMemory, FILE_MAP_ALL_ACCESS, 0, 0, 0));
             sharedMemory[row * maxCellsCount + col] = 2;
             UnmapViewOfFile(sharedMemory);
 
-            ReleaseMutex(hMutex);  // Освобождаем мьютекс
             InvalidateRect(hwnd, nullptr, TRUE);
         }
+
+        ReleaseMutex(hMutex);  //  
     }
     break;
 
